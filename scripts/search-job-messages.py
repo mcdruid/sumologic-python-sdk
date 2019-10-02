@@ -9,23 +9,33 @@
 #
 # Example:
 #
-# cat query.sumoql | python search-job-messages.py <accessId> <accessKey> \
-# 1408643380441 1408649380441 PST false
+# cat query.sumoql | python search-job-messages.py 2019-09-30T00:00:00 2019-09-30T23:59:59
 
 import json
 import sys
 import time
+import os
+from os import path
+
+# for debugging
+# import pprint
+# pp = pprint.PrettyPrinter(indent=4)
 
 from sumologic import SumoLogic
 
-LIMIT = 42
+if path.isfile("access.key"):
+    cf = open("access.key", "r")
+    creds = cf.readlines()
+else:
+    sys.exit("access.key file missing. Place your accessId and accessKey on separate lines in this file.")
 
+sumo = SumoLogic(creds[0].strip(), creds[1].strip())
 args = sys.argv
-sumo = SumoLogic(args[1], args[2])
-fromTime = args[3]
-toTime = args[4]
-timeZone = args[5]
-byReceiptTime = args[6]
+fromTime = args[1]
+toTime = args[2]
+timeZone = 'UTC'
+byReceiptTime = False
+r_fields = ['_messagetime', 'msg'] # names of fields to include in output
 
 delay = 5
 q = ' '.join(sys.stdin.readlines())
@@ -36,12 +46,31 @@ while status['state'] != 'DONE GATHERING RESULTS':
     if status['state'] == 'CANCELLED':
         break
     time.sleep(delay)
+    print('.', end = '')
     status = sumo.search_job_status(sj)
 
 print(status['state'])
 
 if status['state'] == 'DONE GATHERING RESULTS':
     count = status['messageCount']
-    limit = count if count < LIMIT and count != 0 else LIMIT # compensate bad limit check
-    r = sumo.search_job_messages(sj, limit=limit)
-    print(r)
+    print("retrieved " + str(count) + " results")
+
+f = open("sumo_results_" + fromTime + "_to_" + toTime + ".txt", "a+")
+batch = 10000 # The maximum value for limit is 10,000
+offset = 0
+
+while offset < count:
+    print("writing results " + str(offset) + " to " + str(offset + batch))
+    r = sumo.search_job_messages(sj, batch, offset)
+
+    row = {}
+    for res in r['messages']:
+        rf = res['map']
+        for fld in r_fields:
+            row[fld] = rf[fld]
+
+        f.write(json.dumps(row) + "\n")
+
+    offset = offset + batch
+
+f.close()
