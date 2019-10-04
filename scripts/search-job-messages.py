@@ -29,13 +29,21 @@ if path.isfile("access.key"):
 else:
     sys.exit("access.key file missing. Place your accessId and accessKey on separate lines in this file.")
 
-sumo = SumoLogic(creds[0].strip(), creds[1].strip())
 args = sys.argv
+if len(args) < 3:
+    sys.exit("usage: " + args[0] + " fromDate toDate [outFile]")
+
+sumo = SumoLogic(creds[0].strip(), creds[1].strip())
+
 fromTime = args[1]
 toTime = args[2]
 timeZone = 'UTC'
 byReceiptTime = False
 r_fields = ['_messagetime', 'msg'] # names of fields to include in output
+try:
+  outfile = args[3]
+except IndexError:
+  outfile = "sumo_results_" + fromTime + "_to_" + toTime + ".txt"
 
 delay = 5
 q = ' '.join(sys.stdin.readlines())
@@ -55,7 +63,7 @@ if status['state'] == 'DONE GATHERING RESULTS':
     count = status['messageCount']
     print("retrieved " + str(count) + " results")
 
-f = open("sumo_results_" + fromTime + "_to_" + toTime + ".txt", "a+")
+f = open(outfile, "a+")
 batch = 10000 # The maximum value for limit is 10,000
 offset = 0
 
